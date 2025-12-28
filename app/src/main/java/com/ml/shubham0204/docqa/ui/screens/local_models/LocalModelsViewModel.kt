@@ -7,8 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ketch.Ketch
 import com.ketch.Status
+import com.ml.shubham0204.docqa.data.AppSettings
 import com.ml.shubham0204.docqa.data.HFAccessToken
 import com.ml.shubham0204.docqa.data.LocalModel
+import com.ml.shubham0204.docqa.domain.RerankerProvider
 import com.ml.shubham0204.docqa.domain.llm.LiteRTAPI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,12 +32,18 @@ sealed class LocalModelsUIEvent {
         val model: LocalModel,
     ) : LocalModelsUIEvent()
 
+    data class OnRerankerToggle(
+        val enabled: Boolean,
+    ) : LocalModelsUIEvent()
+
     data object RefreshModelsList : LocalModelsUIEvent()
 }
 
 data class LocalModelsUIState(
     val models: List<LocalModel> = emptyList(),
     val downloadModelDialogState: DownloadModelDialogUIState = DownloadModelDialogUIState(),
+    val isRerankerEnabled: Boolean = true,
+    val isRerankerAvailable: Boolean = false,
 )
 
 data class DownloadModelDialogUIState(
@@ -49,6 +57,8 @@ class LocalModelsViewModel(
     private val context: Context,
     private val liteRTAPI: LiteRTAPI,
     private val hfAccessToken: HFAccessToken,
+    private val appSettings: AppSettings,
+    private val rerankerProvider: RerankerProvider,
 ) : ViewModel() {
     private val _uiState =
         MutableStateFlow(
@@ -132,6 +142,12 @@ class LocalModelsViewModel(
                     onEvent(LocalModelsUIEvent.RefreshModelsList)
                 }
             }
+            is LocalModelsUIEvent.OnRerankerToggle -> {
+                appSettings.setRerankerEnabled(event.enabled)
+                _uiState.update {
+                    it.copy(isRerankerEnabled = event.enabled)
+                }
+            }
             is LocalModelsUIEvent.RefreshModelsList -> {
                 _uiState.update {
                     it.copy(
@@ -142,6 +158,8 @@ class LocalModelsViewModel(
                                         liteRTAPI.loadedModelPath == model.getLocalModelPath(context.filesDir.absolutePath),
                                 )
                             },
+                        isRerankerEnabled = appSettings.isRerankerEnabled(),
+                        isRerankerAvailable = rerankerProvider.isAvailable(),
                     )
                 }
             }

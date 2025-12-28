@@ -2,11 +2,14 @@ package com.ml.shubham0204.docqa.ui.screens.local_models
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,10 +24,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -73,6 +81,32 @@ fun LocalModelsScreen(
                 LaunchedEffect(0) {
                     onEvent(LocalModelsUIEvent.RefreshModelsList)
                 }
+                
+                // Reranker Toggle Section
+                RerankerToggle(
+                    isRerankerEnabled = uiState.isRerankerEnabled,
+                    isRerankerAvailable = uiState.isRerankerAvailable,
+                    onToggle = { enabled ->
+                        onEvent(LocalModelsUIEvent.OnRerankerToggle(enabled))
+                    }
+                )
+                
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Section header for LLM models
+                Text(
+                    text = "LLM Models",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                
                 LocalModelsList(
                     uiState.models,
                     onDownloadModelClick = { localModel ->
@@ -177,6 +211,50 @@ private fun LocalModelListItem(
         modifier = Modifier.padding(horizontal = 8.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     )
+}
+
+@Composable
+private fun RerankerToggle(
+    isRerankerEnabled: Boolean,
+    isRerankerAvailable: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable Reranker",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = if (isRerankerAvailable) {
+                        "Cross-encoder model improves retrieval quality"
+                    } else {
+                        "Reranker model not available - add reranker.onnx to assets"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isRerankerAvailable) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+            }
+            Switch(
+                checked = isRerankerEnabled && isRerankerAvailable,
+                onCheckedChange = onToggle,
+                enabled = isRerankerAvailable,
+            )
+        }
+    }
 }
 
 @Composable

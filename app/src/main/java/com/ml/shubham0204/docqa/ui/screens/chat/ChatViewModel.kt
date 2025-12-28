@@ -6,10 +6,13 @@ import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ml.shubham0204.docqa.data.AppSettings
+import com.ml.shubham0204.docqa.data.Chunk
 import com.ml.shubham0204.docqa.data.ChunksDB
 import com.ml.shubham0204.docqa.data.DocumentsDB
 import com.ml.shubham0204.docqa.data.GeminiAPIKey
 import com.ml.shubham0204.docqa.data.RetrievedContext
+import com.ml.shubham0204.docqa.domain.RerankerProvider
 import com.ml.shubham0204.docqa.domain.SentenceEmbeddingProvider
 import com.ml.shubham0204.docqa.domain.llm.GeminiRemoteAPI
 import com.ml.shubham0204.docqa.domain.llm.LLMInferenceAPI
@@ -73,6 +76,8 @@ class ChatViewModel(
     private val geminiAPIKey: GeminiAPIKey,
     private val sentenceEncoder: SentenceEmbeddingProvider,
     private val liteRTAPI: LiteRTAPI,
+    private val appSettings: AppSettings,
+    private val rerankerProvider: RerankerProvider,
 ) : ViewModel() {
     private val _chatScreenUIState = MutableStateFlow(ChatScreenUIState())
     val chatScreenUIState: StateFlow<ChatScreenUIState> = _chatScreenUIState
@@ -186,7 +191,26 @@ class ChatViewModel(
             var jointContext = ""
             val retrievedContextList = ArrayList<RetrievedContext>()
             val queryEmbedding = sentenceEncoder.encodeText(query)
-            chunksDB.getSimilarChunks(queryEmbedding, n = 5).forEach {
+            
+            // Determine if reranking is enabled and available
+            val useReranking = appSettings.isRerankerEnabled() && rerankerProvider.isAvailable()
+            
+            // Fetch more candidates when reranking (50), otherwise just get top 5
+            val candidateCount = if (useReranking) 50 else 5
+            val initialResults = chunksDB.getSimilarChunks(
+                queryEmbedding, 
+                n = 5, 
+                candidateCount = candidateCount
+            )
+            
+            // Apply reranking if enabled, then take top 5
+            val rankedResults: List<Pair<Float, Chunk>> = if (useReranking) {
+                rerankerProvider.rerank(query, initialResults).take(5)
+            } else {
+                initialResults.take(5)
+            }
+            
+            rankedResults.forEach {
                 jointContext += " " + it.second.chunkData
                 retrievedContextList.add(
                     RetrievedContext(
