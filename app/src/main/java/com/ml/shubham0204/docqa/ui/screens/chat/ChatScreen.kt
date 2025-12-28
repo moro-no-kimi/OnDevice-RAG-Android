@@ -153,7 +153,7 @@ private fun ColumnScope.QALayout(screenUiState: ChatScreenUIState) {
                     }
                 }
                 item {
-                    if (!screenUiState.isGeneratingResponse) {
+                    if (screenUiState.response.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Column(
                             modifier =
@@ -171,27 +171,29 @@ private fun ColumnScope.QALayout(screenUiState: ChatScreenUIState) {
                                         fontSize = 14.sp,
                                     ),
                             )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        val sendIntent: Intent =
-                                            Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, screenUiState.response)
-                                                type = "text/plain"
-                                            }
-                                        val shareIntent = Intent.createChooser(sendIntent, null)
-                                        context.startActivity(shareIntent)
-                                    },
+                            if (!screenUiState.isGeneratingResponse) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Share the response",
-                                        tint = Color.Black,
-                                    )
+                                    IconButton(
+                                        onClick = {
+                                            val sendIntent: Intent =
+                                                Intent().apply {
+                                                    action = Intent.ACTION_SEND
+                                                    putExtra(Intent.EXTRA_TEXT, screenUiState.response)
+                                                    type = "text/plain"
+                                                }
+                                            val shareIntent = Intent.createChooser(sendIntent, null)
+                                            context.startActivity(shareIntent)
+                                        },
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = "Share the response",
+                                            tint = Color.Black,
+                                        )
+                                    }
                                 }
                             }
                         }

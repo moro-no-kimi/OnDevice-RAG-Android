@@ -15,13 +15,16 @@ import com.ml.shubham0204.docqa.domain.llm.GeminiRemoteAPI
 import com.ml.shubham0204.docqa.domain.llm.LLMInferenceAPI
 import com.ml.shubham0204.docqa.domain.llm.LiteRTAPI
 import com.ml.shubham0204.docqa.ui.components.createAlertDialog
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
 
 sealed interface ChatScreenUIEvent {
@@ -182,33 +185,52 @@ class ChatViewModel(
         query: String,
         prompt: String,
     ) {
-        try {
-            var jointContext = ""
-            val retrievedContextList = ArrayList<RetrievedContext>()
-            val queryEmbedding = sentenceEncoder.encodeText(query)
-            chunksDB.getSimilarChunks(queryEmbedding, n = 5).forEach {
-                jointContext += " " + it.second.chunkData
-                retrievedContextList.add(
-                    RetrievedContext(
-                        it.second.docFileName,
-                        it.second.chunkData,
-                    ),
-                )
-            }
-            val inputPrompt = prompt.replace("\$CONTEXT", jointContext).replace("\$QUERY", query)
-            CoroutineScope(Dispatchers.IO).launch {
-                llm.getResponse(inputPrompt)?.let { llmResponse ->
-                    onChatScreenEvent(
-                        ChatScreenUIEvent.ResponseGeneration.StopWithSuccess(
-                            llmResponse,
-                            retrievedContextList,
+        viewModelScope.launch {
+            try {
+                var jointContext = ""
+                val retrievedContextList = ArrayList<RetrievedContext>()
+                val queryEmbedding = withContext(Dispatchers.Default) {
+                    sentenceEncoder.encodeText(query)
+                }
+                chunksDB.getSimilarChunks(queryEmbedding, n = 5).forEach {
+                    jointContext += " " + it.second.chunkData
+                    retrievedContextList.add(
+                        RetrievedContext(
+                            it.second.docFileName,
+                            it.second.chunkData,
                         ),
                     )
                 }
+                val inputPrompt = prompt.replace("\$CONTEXT", jointContext).replace("\$QUERY", query)
+                
+                // Update retrieved context immediately
+                _chatScreenUIState.value = _chatScreenUIState.value.copy(
+                    retrievedContextList = retrievedContextList
+                )
+                
+                // Stream the response
+                llm.getResponseStream(inputPrompt)
+                    .onStart {
+                        _chatScreenUIState.value = _chatScreenUIState.value.copy(response = "")
+                    }
+                    .onCompletion {
+                        _chatScreenUIState.value = _chatScreenUIState.value.copy(
+                            isGeneratingResponse = false
+                        )
+                    }
+                    .catch { e ->
+                        onChatScreenEvent(
+                            ChatScreenUIEvent.ResponseGeneration.StopWithError(e.message ?: "")
+                        )
+                    }
+                    .collect { partialResponse ->
+                        _chatScreenUIState.value = _chatScreenUIState.value.copy(
+                            response = partialResponse
+                        )
+                    }
+            } catch (e: Exception) {
+                onChatScreenEvent(ChatScreenUIEvent.ResponseGeneration.StopWithError(e.message ?: ""))
             }
-        } catch (e: Exception) {
-            onChatScreenEvent(ChatScreenUIEvent.ResponseGeneration.StopWithError(e.message ?: ""))
-            throw e
         }
     }
 

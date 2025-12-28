@@ -5,6 +5,10 @@ import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
 
@@ -65,6 +69,21 @@ class LiteRTAPI : LLMInferenceAPI() {
             Log.e("APP", "Prompt given: $prompt")
             llmInference.generateResponse(prompt)
         }
+
+    override fun getResponseStream(prompt: String): Flow<String> = callbackFlow {
+        Log.e("APP", "Streaming prompt: $prompt")
+        val listener = PartialProgressListener(
+            onPartialResponseGenerated = { partialResponse ->
+                trySend(partialResponse)
+            },
+            onSuccess = { finalResponse ->
+                trySend(finalResponse)
+                close()
+            }
+        )
+        llmInference.generateResponseAsync(prompt, listener)
+        awaitClose { /* Cleanup if needed */ }
+    }.flowOn(Dispatchers.Default)
 
     fun unload() {
         llmInference.close()

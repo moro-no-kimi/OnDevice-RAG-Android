@@ -5,6 +5,9 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.GenerationConfig
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 class GeminiRemoteAPI(
@@ -40,4 +43,15 @@ class GeminiRemoteAPI(
             val response = generativeModel.generateContent(prompt)
             return@withContext response.text
         }
+
+    override fun getResponseStream(prompt: String): Flow<String> = flow {
+        Log.e("APP", "Streaming prompt: $prompt")
+        var accumulatedResponse = ""
+        generativeModel.generateContentStream(prompt).collect { chunk ->
+            chunk.text?.let { text ->
+                accumulatedResponse += text
+                emit(accumulatedResponse)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
 }
